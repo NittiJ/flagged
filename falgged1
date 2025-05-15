@@ -1,0 +1,118 @@
+if (folder_moved) {
+  
+  folder_to_zip   <- FolderName  
+  zip_file        <- paste0("c:\\temp\\", folder_to_zip, ".zip")
+  max_size_bytes  <- 25 * 1024 * 1024
+  
+  suppressWarnings(
+    zip::zip(zip_file,
+             files = folder_to_zip,
+             root  = '\\\\oh2shared\\oh2actuarial\\National\\Disruption Insourcing\\_Production Finished Batch/')
+  )
+  
+  zip_file_size <- fs::file_info(zip_file)$size
+  num_flags     <- sum(Disruption_Data$Flag == "FLAG", na.rm = TRUE)
+  
+  # Default email body
+  bl_body <- if (zip_file_size <= max_size_bytes) {
+    paste0("The ", Parameters$Values[1], " disruption is finished and has been attached.<br><br>",
+           "Please reach out if you have any questions and have a wonderful day!<br><br>",
+           "<em>This is an automated message</em>")
+  } else {
+    paste0("The ", Parameters$Values[1], " disruption is finished and may be found here:<br><br>",
+           "<a href='\\\\\\oh2shared\\oh2actuarial\\National\\Disruption Insourcing\\_Production Finished Batch\\",
+           FolderName, "\\'>Link to the finished disruption</a><br><br>",
+           "This disruption has ", num_flags, " flagged records.<br>",
+           "If you do not have access to this folder location, please reach out to NetworkAnalysisUnit@anthem.com.<br><br>",
+           "Please reach out if you have any questions and have a wonderful day!")
+  }
+  
+  subject_line  <- paste0("Disruption Finished - ", Parameters$Values[1])
+  Analyst_Email <- Parameters$Values[3]  # default to original requestor
+  
+  # --- Custom reroute logic for auto files ---
+  if (substring(FileName, 1, 4) == "auto") {
+    
+    # Load network-specific thresholds from Excel
+    Custom_Thresholds <- readxl::read_excel(
+      path = "//oh2shared/oh2actuarial/National/Disruption Insourcing/Network Threshold Flags.xlsx",
+      sheet = "Thresholds",
+      col_types = c("text", "text", "numeric")
+    )
+    
+    default_threshold <- 0.90
+    HPN_threshold     <- 0.80
+    HMO_threshold     <- 0.85
+    
+    flagged_summaries <- list()
+    
+    for (nm in names(network_match_list)) {
+      pct <- network_match_list[[nm]]
+      if (is.na(pct)) next
+      
+      # Start with default threshold
+      threshold <- default_threshold
+      
+      # HPN / HMO logic
+      if (nm == "HPN") threshold <- HPN_threshold
+      if (nm == "HMO") threshold <- HMO_threshold
+      
+      # Check for custom Select thresholds
+      threshold_custom <- Custom_Thresholds %>%
+        filter(Alpha_Network_Name == nm) %>%
+        pull(Threshold) %>%
+        first()
+      
+      if (!is.na(threshold_custom)) {
+        threshold <- threshold_custom
+      }
+      
+      # Flag if below threshold
+      if (pct < threshold) {
+        flagged_summaries[[nm]] <- pct
+      }
+    }
+    
+    # If any were flagged, override email
+    if (length(flagged_summaries) > 0) {
+      Analyst_Email <- "NetworkAnalysisUnit@healthcare.com"
+      subject_line  <- paste0("! FLAGGED: Low Match Rate - ", Parameters$Values[1])
+      
+      summary_lines <- paste0(
+        "<ul>",
+        paste0(
+          "<li>", names(flagged_summaries), ": ",
+          sprintf("%.2f%%", unlist(flagged_summaries) * 100),
+          "</li>", collapse = ""
+        ),
+        "</ul>"
+      )
+      
+      bl_body <- paste0(
+        "This disruption was flagged due to low match rates in the following network(s):<br><br>",
+        summary_lines,
+        "<br>Original requestor:<br><strong>Email:</strong> ", Parameters$Values[3]
+      )
+    }
+  }
+  
+  # --- Send the email ---
+  bl_em <- compose_email(body = md(bl_body))
+  
+  if (zip_file_size <= max_size_bytes) {
+    bl_em <- bl_em %>%
+      add_attachment(file = zip_file)
+  }
+  
+  bl_em %>% smtp_send(
+    from        = creds_key(id = "my_creds")$user,
+    to          = Analyst_Email,
+    subject     = subject_line,
+    credentials = creds_key(id = "my_creds")
+  )
+  
+  fs::file_delete(zip_file)
+}
+
+# Clean up
+rm(list = ls()[-grep("(FileList)|(\\bl\\b)|(Total_Time)|(skip_to_next)", ls())])
