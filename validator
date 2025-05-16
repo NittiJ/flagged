@@ -1,0 +1,66 @@
+Add this after your Custom_Thresholds <- read.xlsx(...) and before the email logic:
+
+# Validate that all network names have thresholds
+unmatched_networks <- setdiff(
+  names(network_match_list),
+  Custom_Thresholds$Alpha_Network_Name
+)
+
+if (length(unmatched_networks) > 0) {
+  warning("The following networks in network_match_list were not found in the threshold Excel and will use default threshold:\n",
+          paste(unmatched_networks, collapse = "\n"))
+}
+
+
+
+  🔍 What this does:
+Compares your actual run networks (network_match_list keys)
+
+Against what's defined in the threshold Excel (Alpha_Network_Name)
+
+Outputs a warning for each one not found — useful for catching:
+
+Misspellings
+
+Missing "blend" variants
+
+New networks not yet added to Excel
+
+
+
+
+
+  Create the admin message:
+
+
+
+
+  admin_notice <- ""
+if (length(unmatched_networks) > 0) {
+  admin_notice <- paste0(
+    "<br><br><hr><br>",
+    "<em><strong>Admin Notice:</strong> The following networks were not found in the thresholds sheet and used the default value:</em><br><ul>",
+    paste0("<li>", unmatched_networks, "</li>", collapse = ""),
+    "</ul>"
+  )
+}
+
+
+
+
+  Append to your bl_body like this:
+
+r
+Copy
+Edit
+
+
+
+
+  bl_body <- paste0(
+  "This disruption was flagged due to low match rates in the following network(s):<br><br>",
+  summary_lines,
+  select_lines,
+  "Original requestor:<br><strong>Email:</strong> ", Parameters$Values[3],
+  admin_notice  # this only appears if something was unmatched
+)
