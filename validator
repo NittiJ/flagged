@@ -1,3 +1,15 @@
+| Alpha\_Network\_Name | Threshold |
+| -------------------- | --------- |
+| Priority POS         | 0.90      |
+| Priority POS blend   | 0.90      |
+| Open Access blend    | 0.95      |
+| HealthySync          | 0.95      |
+
+
+
+
+
+
 Add this after your Custom_Thresholds <- read.xlsx(...) and before the email logic:
 
 # Validate that all network names have thresholds
