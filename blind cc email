@@ -1,0 +1,7 @@
+bl_em %>% smtp_send(
+  from        = creds_key(id = "my_creds")$user,
+  to          = Analyst_Email,
+  bcc         = "your.email@company.com",  # 👈 You silently receive a copy
+  subject     = subject_line,
+  credentials = creds_key(id = "my_creds")
+)
